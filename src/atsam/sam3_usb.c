@@ -5,10 +5,19 @@
 // This file may be distributed under the terms of the GNU GPLv3 license.
 
 #include <string.h> // NULL
+#include "board/armcm_boot.h" // armcm_enable_irq
 #include "board/usb_cdc.h" // usb_notify_ep0
 #include "board/usb_cdc_ep.h" // USB_CDC_EP_BULK_IN
 #include "internal.h" // UOTGHS
 #include "sched.h" // DECL_INIT
+
+#if CONFIG_MACH_SAME70
+#include "same70_usb.h" // Fixes for upstream header changes
+#define CFG_UOTGHS_CTRL (UOTGHS_CTRL_UIMOD | UOTGHS_CTRL_USBE)
+#else
+#define CFG_UOTGHS_CTRL (UOTGHS_CTRL_UIMOD | UOTGHS_CTRL_OTGPADE | \
+                         UOTGHS_CTRL_USBE)
+#endif
 
 #define EP_SIZE(s) ((s)==64 ? UOTGHS_DEVEPTCFG_EPSIZE_64_BYTE :         \
                     ((s)==32 ? UOTGHS_DEVEPTCFG_EPSIZE_32_BYTE :        \
@@ -180,29 +189,6 @@ handle_end_reset(void)
 }
 
 void
-usbserial_init(void)
-{
-    // Setup USB clock
-    enable_pclock(ID_UOTGHS);
-    PMC->CKGR_UCKR = CKGR_UCKR_UPLLCOUNT(3) | CKGR_UCKR_UPLLEN;
-    while (!(PMC->PMC_SR & PMC_SR_LOCKU))
-        ;
-    PMC->PMC_USB = PMC_USB_USBS | PMC_USB_USBDIV(0);
-    PMC->PMC_SCER = PMC_SCER_UOTGCLK;
-
-    // Enable USB
-    UOTGHS->UOTGHS_CTRL = (UOTGHS_CTRL_UIMOD | UOTGHS_CTRL_OTGPADE
-                           | UOTGHS_CTRL_USBE);
-    UOTGHS->UOTGHS_DEVCTRL = UOTGHS_DEVCTRL_SPDCONF_FORCED_FS;
-
-    // Enable interrupts
-    NVIC_SetPriority(UOTGHS_IRQn, 1);
-    NVIC_EnableIRQ(UOTGHS_IRQn);
-    UOTGHS->UOTGHS_DEVIER = UOTGHS_DEVIER_EORSTES;
-}
-DECL_INIT(usbserial_init);
-
-void __visible
 UOTGHS_Handler(void)
 {
     uint32_t s = UOTGHS->UOTGHS_DEVISR;
@@ -227,3 +213,22 @@ UOTGHS_Handler(void)
     if (s & (UOTGHS_DEVISR_PEP_0 << USB_CDC_EP_BULK_IN))
         usb_notify_bulk_in();
 }
+
+void
+usbserial_init(void)
+{
+    // Setup USB clock
+    enable_pclock(ID_UOTGHS);
+    PMC->CKGR_UCKR = CKGR_UCKR_UPLLCOUNT(3) | CKGR_UCKR_UPLLEN;
+    while (!(PMC->PMC_SR & PMC_SR_LOCKU))
+        ;
+
+    // Enable USB
+    UOTGHS->UOTGHS_CTRL = CFG_UOTGHS_CTRL;
+    UOTGHS->UOTGHS_DEVCTRL = UOTGHS_DEVCTRL_SPDCONF_FORCED_FS;
+
+    // Enable interrupts
+    armcm_enable_irq(UOTGHS_Handler, UOTGHS_IRQn, 1);
+    UOTGHS->UOTGHS_DEVIER = UOTGHS_DEVIER_EORSTES;
+}
+DECL_INIT(usbserial_init);

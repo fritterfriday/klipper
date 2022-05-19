@@ -1,7 +1,8 @@
+# Benchmarks
+
 This document describes Klipper benchmarks.
 
-Micro-controller Benchmarks
-===========================
+## Micro-controller Benchmarks
 
 This section describes the mechanism used to generate the Klipper
 micro-controller step rate benchmarks.
@@ -23,7 +24,7 @@ or other innocuous pins. **Always verify that it is safe to drive the
 configured pins prior to running a benchmark.** It is not recommended
 to drive an actual stepper during a benchmark.
 
-## Step rate benchmark test ##
+### Step rate benchmark test
 
 The test is performed using the console.py tool (described in
 [Debugging.md](Debugging.md)). The micro-controller is configured for
@@ -66,12 +67,11 @@ in preparation for the next test:
 clear_shutdown
 ```
 
-To obtain the single stepper and dual stepper benchmarks, the same
-configuration sequence is used, but only the first block (for the
-single stepper case) or first two blocks (for the dual stepper case)
-of the above test is cut-and-paste into the console.py window.
+To obtain the single stepper benchmarks, the same configuration
+sequence is used, but only the first block of the above test is
+cut-and-paste into the console.py window.
 
-To produce the benchmarks found in the Features.md document, the total
+To produce the benchmarks found in the [Features](Features.md) document, the total
 number of steps per second is calculated by multiplying the number of
 active steppers with the nominal mcu frequency and dividing by the
 final ticks parameter. The results are rounded to the nearest K. For
@@ -80,201 +80,302 @@ example, with three active steppers:
 ECHO Test result is: {"%.0fK" % (3. * freq / ticks / 1000.)}
 ```
 
-### AVR step rate benchmark ###
+The benchmarks are run with parameters suitable for TMC Drivers. For
+micro-controllers that support `STEPPER_BOTH_EDGE=1` (as reported in
+the `MCU config` line when console.py first starts) use
+`step_pulse_duration=0` and `invert_step=-1` to enable optimized
+stepping on both edges of the step pulse. For other micro-controllers
+use a `step_pulse_duration` corresponding to 100ns.
+
+### AVR step rate benchmark
 
 The following configuration sequence is used on AVR chips:
 ```
-PINS arduino
 allocate_oids count=3
-config_stepper oid=0 step_pin=ar29 dir_pin=ar28 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=ar27 dir_pin=ar26 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=ar23 dir_pin=ar22 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=PA5 dir_pin=PA4 invert_step=0 step_pulse_ticks=32
+config_stepper oid=1 step_pin=PA3 dir_pin=PA2 invert_step=0 step_pulse_ticks=32
+config_stepper oid=2 step_pin=PC7 dir_pin=PC6 invert_step=0 step_pulse_ticks=32
 finalize_config crc=0
 ```
 
-The test was last run on commit `b161a69e` with gcc version `avr-gcc
-(GCC) 4.8.1`. Both the 16Mhz and 20Mhz tests were run using simulavr
+The test was last run on commit `59314d99` with gcc version `avr-gcc
+(GCC) 5.4.0`. Both the 16Mhz and 20Mhz tests were run using simulavr
 configured for an atmega644p (previous tests have confirmed simulavr
 results match tests on both a 16Mhz at90usb and a 16Mhz atmega2560).
-On both 16Mhz and 20Mhz the best single stepper result is `SET ticks
-106`, the best dual stepper result is `SET ticks 276`, and the best
-three stepper result is `SET ticks 481`.
 
-### Arduino Due step rate benchmark ###
+| avr              | ticks |
+| ---------------- | ----- |
+| 1 stepper        | 102   |
+| 3 stepper        | 486   |
+
+### Arduino Due step rate benchmark
 
 The following configuration sequence is used on the Due:
 ```
 allocate_oids count=3
-config_stepper oid=0 step_pin=PB27 dir_pin=PA21 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PB26 dir_pin=PC30 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PA21 dir_pin=PC30 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=PB27 dir_pin=PA21 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PB26 dir_pin=PC30 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PA21 dir_pin=PC30 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `74c21654` with gcc version
-`arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0`. The best single
-stepper result is `SET ticks 388`, the best dual stepper result is
-`SET ticks 405`, and the best three stepper result is `SET ticks 576`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0`.
 
-### Duet Maestro step rate benchmark ###
+| sam3x8e              | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 66    |
+| 3 stepper            | 257   |
+
+### Duet Maestro step rate benchmark
 
 The following configuration sequence is used on the Duet Maestro:
 ```
 allocate_oids count=3
-config_stepper oid=0 step_pin=PC26 dir_pin=PC18 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PC26 dir_pin=PA8 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PC26 dir_pin=PB4 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=PC26 dir_pin=PC18 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PC26 dir_pin=PA8 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PC26 dir_pin=PB4 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `74c21654` with gcc version
-`arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0`. The best single
-stepper result is `SET ticks 553`, the best dual stepper result is
-`SET ticks 563`, and the best three stepper result is `SET ticks 623`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0`.
 
-### Duet Wifi step rate benchmark ###
+| sam4s8c              | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 71    |
+| 3 stepper            | 260   |
+
+### Duet Wifi step rate benchmark
 
 The following configuration sequence is used on the Duet Wifi:
 ```
-allocate_oids count=4
-config_stepper oid=0 step_pin=PD6 dir_pin=PD11 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PD7 dir_pin=PD12 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PD8 dir_pin=PD13 min_stop_interval=0 invert_step=0
-config_stepper oid=3 step_pin=PD5 dir_pin=PA1 min_stop_interval=0 invert_step=0
+allocate_oids count=3
+config_stepper oid=0 step_pin=PD6 dir_pin=PD11 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PD7 dir_pin=PD12 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PD8 dir_pin=PD13 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
-
 ```
 
-The test was last run on commit `59a60d68` with gcc version
-`arm-none-eabi-gcc 7.3.1 20180622 (release)
-[ARM/embedded-7-branch revision 261907]`. The best single stepper
-result is `SET ticks 519`, the best dual stepper result is `SET ticks
-520`, and the best three stepper result is `SET ticks 525`, and the
-best four stepper result is `SET ticks 703`.
+The test was last run on commit `59314d99` with gcc version
+`gcc version 10.3.1 20210621 (release) (GNU Arm Embedded Toolchain 10.3-2021.07)`.
 
-### Beaglebone PRU step rate benchmark ###
+| sam4e8e          | ticks |
+| ---------------- | ----- |
+| 1 stepper        | 48    |
+| 3 stepper        | 215   |
+
+### Beaglebone PRU step rate benchmark
 
 The following configuration sequence is used on the PRU:
 ```
-PINS beaglebone
 allocate_oids count=3
-config_stepper oid=0 step_pin=P8_13 dir_pin=P8_12 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=P8_15 dir_pin=P8_14 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=P8_19 dir_pin=P8_18 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=gpio0_23 dir_pin=gpio1_12 invert_step=0 step_pulse_ticks=20
+config_stepper oid=1 step_pin=gpio1_15 dir_pin=gpio0_26 invert_step=0 step_pulse_ticks=20
+config_stepper oid=2 step_pin=gpio0_22 dir_pin=gpio2_1 invert_step=0 step_pulse_ticks=20
 finalize_config crc=0
 ```
 
-The test was last run on commit `b161a69e` with gcc version `pru-gcc
-(GCC) 8.0.0 20170530 (experimental)`. The best single stepper result
-is `SET ticks 861`, the best dual stepper result is `SET ticks 853`,
-and the best three stepper result is `SET ticks 883`.
+The test was last run on commit `59314d99` with gcc version `pru-gcc
+(GCC) 8.0.0 20170530 (experimental)`.
 
-### STM32F042 step rate benchmark ###
+| pru              | ticks |
+| ---------------- | ----- |
+| 1 stepper        | 231   |
+| 3 stepper        | 847   |
+
+### STM32F042 step rate benchmark
 
 The following configuration sequence is used on the STM32F042:
 ```
 allocate_oids count=3
-config_stepper oid=0 step_pin=PA0 dir_pin=PA1 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PA2 dir_pin=PA3 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PA6 dir_pin=PA7 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=PA1 dir_pin=PA2 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PA3 dir_pin=PA2 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PB8 dir_pin=PA2 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `c105adc8` with gcc version
-`arm-none-eabi-gcc (GNU Tools 7-2018-q3-update) 7.3.1`. The best single
-stepper result is `SET ticks 308`, the best dual stepper result is
-`SET ticks 638`, and the best three stepper result is `SET ticks 1021`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0`.
 
-### STM32F103 step rate benchmark ###
+| stm32f042        | ticks |
+| ---------------- | ----- |
+| 1 stepper        | 59    |
+| 3 stepper        | 249   |
+
+### STM32F103 step rate benchmark
 
 The following configuration sequence is used on the STM32F103:
 ```
 allocate_oids count=3
-config_stepper oid=0 step_pin=PC13 dir_pin=PB5 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PB3 dir_pin=PB6 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PA4 dir_pin=PB7 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=PC13 dir_pin=PB5 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PB3 dir_pin=PB6 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PA4 dir_pin=PB7 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `9f3517fd` with gcc version
-`arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0`. The best single
-stepper result is `SET ticks 345`, the best dual stepper result is
-`SET ticks 365`, and the best three stepper result is `SET ticks 606`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0`.
 
-### STM32F446 step rate benchmark ###
+| stm32f103            | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 61    |
+| 3 stepper            | 264   |
 
-The following configuration sequence is used on the STM32F446:
+### STM32F4 step rate benchmark
+
+The following configuration sequence is used on the STM32F4:
 ```
-allocate_oids count=4
-config_stepper oid=0 step_pin=PA5 dir_pin=PB5 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PB2 dir_pin=PB6 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PB3 dir_pin=PB7 min_stop_interval=0 invert_step=0
-config_stepper oid=3 step_pin=PB3 dir_pin=PB8 min_stop_interval=0 invert_step=0
+allocate_oids count=3
+config_stepper oid=0 step_pin=PA5 dir_pin=PB5 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PB2 dir_pin=PB6 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PB3 dir_pin=PB7 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `1487f8a2` with gcc version
-`arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0`. The best single
-stepper result is `SET ticks 757`, the best dual stepper result is
-`SET ticks 761`, the best three stepper result is `SET ticks 757`, and
-the best four stepper result is `SET ticks 767`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0`. The STM32F407
+results were obtained by running an STM32F407 binary on an STM32F446
+(and thus using a 168Mhz clock).
 
-### LPC176x step rate benchmark ###
+| stm32f446            | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 46    |
+| 3 stepper            | 205   |
+
+| stm32f407            | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 46    |
+| 3 stepper            | 205   |
+
+### STM32G0B1 step rate benchmark
+
+The following configuration sequence is used on the STM32G0B1:
+```
+allocate_oids count=3
+config_stepper oid=0 step_pin=PB13 dir_pin=PB12 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PB10 dir_pin=PB2 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PB0 dir_pin=PC5 invert_step=-1 step_pulse_ticks=0
+finalize_config crc=0
+```
+
+The test was last run on commit `247cd753` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0`.
+
+| stm32g0b1        | ticks |
+| ---------------- | ----- |
+| 1 stepper        | 58    |
+| 3 stepper        | 243   |
+
+### LPC176x step rate benchmark
 
 The following configuration sequence is used on the LPC176x:
 ```
 allocate_oids count=3
-config_stepper oid=0 step_pin=P1.20 dir_pin=P1.18 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=P1.21 dir_pin=P1.18 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=P1.23 dir_pin=P1.18 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=P1.20 dir_pin=P1.18 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=P1.21 dir_pin=P1.18 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=P1.23 dir_pin=P1.18 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `9f3517fd` with gcc version
-`arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0`. For the 100Mhz
-LPC1768, the best single stepper result is `SET ticks 448`, the best
-dual stepper result is `SET ticks 450`, and the best three stepper
-result is `SET ticks 523`. The 120Mhz LPC1769 results were obtained by
-overclocking an LPC1768 to 120Mhz - the best single stepper result is
-`SET ticks 525`, the best dual stepper result is `SET ticks 526`, and
-the best three stepper result is `SET ticks 545`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0`. The 120Mhz LPC1769
+results were obtained by overclocking an LPC1768 to 120Mhz.
 
-### SAMD21 step rate benchmark ###
+| lpc1768              | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 52    |
+| 3 stepper            | 222   |
+
+| lpc1769              | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 51    |
+| 3 stepper            | 222   |
+
+### SAMD21 step rate benchmark
 
 The following configuration sequence is used on the SAMD21:
 ```
 allocate_oids count=3
-config_stepper oid=0 step_pin=PA27 dir_pin=PA20 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PB3 dir_pin=PA21 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PA17 dir_pin=PA21 min_stop_interval=0 invert_step=0
+config_stepper oid=0 step_pin=PA27 dir_pin=PA20 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PB3 dir_pin=PA21 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PA17 dir_pin=PA21 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `9f3517fd` with gcc version
-`arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0`. The best single
-stepper result is `SET ticks 277`, the best dual stepper result is
-`SET ticks 410`, and the best three stepper result is `SET ticks 664`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0` on a SAMD21G18
+micro-controller.
 
-### SAMD51 step rate benchmark ###
+| samd21               | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 70    |
+| 3 stepper            | 306   |
+
+### SAMD51 step rate benchmark
 
 The following configuration sequence is used on the SAMD51:
 ```
-allocate_oids count=4
-config_stepper oid=0 step_pin=PA22 dir_pin=PA20 min_stop_interval=0 invert_step=0
-config_stepper oid=1 step_pin=PA22 dir_pin=PA21 min_stop_interval=0 invert_step=0
-config_stepper oid=2 step_pin=PA22 dir_pin=PA19 min_stop_interval=0 invert_step=0
-config_stepper oid=3 step_pin=PA22 dir_pin=PA18 min_stop_interval=0 invert_step=0
+allocate_oids count=3
+config_stepper oid=0 step_pin=PA22 dir_pin=PA20 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=PA22 dir_pin=PA21 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=PA22 dir_pin=PA19 invert_step=-1 step_pulse_ticks=0
 finalize_config crc=0
 ```
 
-The test was last run on commit `9f3517fd` with gcc version
-`arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0` on a SAMD51G19A
-micro-controller. The best single stepper result is `SET ticks 516`,
-the best dual stepper result is `SET ticks 520`, the best three
-stepper result is `SET ticks 519`, and the best four stepper result is
-`SET ticks 655`.
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0` on a SAMD51J19A
+micro-controller.
 
-## Command dispatch benchmark ##
+| samd51               | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 39    |
+| 3 stepper            | 191   |
+| 1 stepper (200Mhz)   | 39    |
+| 3 stepper (200Mhz)   | 181   |
+
+### RP2040 step rate benchmark
+
+The following configuration sequence is used on the RP2040:
+
+```
+allocate_oids count=3
+config_stepper oid=0 step_pin=gpio25 dir_pin=gpio3 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=1 step_pin=gpio26 dir_pin=gpio4 invert_step=-1 step_pulse_ticks=0
+config_stepper oid=2 step_pin=gpio27 dir_pin=gpio5 invert_step=-1 step_pulse_ticks=0
+finalize_config crc=0
+```
+
+The test was last run on commit `59314d99` with gcc version
+`arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0` on a Raspberry Pi
+Pico board.
+
+| rp2040               | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 5     |
+| 3 stepper            | 22    |
+
+### Linux MCU step rate benchmark
+
+The following configuration sequence is used on a Raspberry Pi:
+```
+allocate_oids count=3
+config_stepper oid=0 step_pin=gpio2 dir_pin=gpio3 invert_step=0 step_pulse_ticks=5
+config_stepper oid=1 step_pin=gpio4 dir_pin=gpio5 invert_step=0 step_pulse_ticks=5
+config_stepper oid=2 step_pin=gpio6 dir_pin=gpio17 invert_step=0 step_pulse_ticks=5
+finalize_config crc=0
+```
+
+The test was last run on commit `59314d99` with gcc version
+`gcc (Raspbian 8.3.0-6+rpi1) 8.3.0` on a Raspberry Pi 3 (revision
+a02082). It was difficult to get stable results in this benchmark.
+
+| Linux (RPi3)         | ticks |
+| -------------------- | ----- |
+| 1 stepper            | 160   |
+| 3 stepper            | 380   |
+
+## Command dispatch benchmark
 
 The command dispatch benchmark tests how many "dummy" commands the
 micro-controller can process. It is primarily a test of the hardware
@@ -283,7 +384,7 @@ communication mechanism. The test is run using the console.py tool
 cut-and-paste into the console.py terminal window:
 ```
 DELAY {clock + 2*freq} get_uptime
-FLOOD 100000 0.0 end_group
+FLOOD 100000 0.0 debug_nop
 get_uptime
 ```
 
@@ -292,26 +393,30 @@ reported in the two "uptime" response messages. The total number of
 commands per second is then `100000 * mcu_frequency / clock_diff`.
 
 Note that this test may saturate the USB/CPU capacity of a Raspberry
-Pi. The benchmarks below are with console.py running on a desktop
-class machine.
+Pi. If running on a Raspberry Pi, Beaglebone, or similar host computer
+then increase the delay (eg, `DELAY {clock + 20*freq} get_uptime`).
+Where applicable, the benchmarks below are with console.py running on
+a desktop class machine with the device connected via a high-speed
+hub.
 
 | MCU                 | Rate | Build    | Build compiler      |
 | ------------------- | ---- | -------- | ------------------- |
-| pru (shared memory) |   5K | b161a69e | pru-gcc (GCC) 8.0.0 20170530 (experimental) |
+| stm32f042 (CAN)     |  18K | c105adc8 | arm-none-eabi-gcc (GNU Tools 7-2018-q3-update) 7.3.1 |
 | atmega2560 (serial) |  23K | b161a69e | avr-gcc (GCC) 4.8.1 |
 | sam3x8e (serial)    |  23K | b161a69e | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
-| at90usb1286 (USB)   |  75K | b161a69e | avr-gcc (GCC) 4.8.1 |
-| samd21 (USB)        | 238K | b161a69e | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
-| stm32f042 (CAN)     |  18K | c105adc8 | arm-none-eabi-gcc (GNU Tools 7-2018-q3-update) 7.3.1 |
-| stm32f103 (USB)     | 335K | b161a69e | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
-| sam3x8e (USB)       | 450K | a5aede52 | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
-| lpc1768 (USB)       | 546K | b161a69e | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
-| sam4s8c (USB)       | 619K | a5aede52 | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
-| lpc1769 (USB)       | 619K | b161a69e | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
-| samd51 (USB)        | 620K | 8cd83b4c | arm-none-eabi-gcc (Fedora 7.1.0-5.fc27) 7.1.0 |
+| at90usb1286 (USB)   |  75K | 01d2183f | avr-gcc (GCC) 5.4.0 |
+| samd21 (USB)        | 223K | 01d2183f | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| pru (shared memory) | 260K | c5968a08 | pru-gcc (GCC) 8.0.0 20170530 (experimental) |
+| stm32f103 (USB)     | 355K | 01d2183f | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| sam3x8e (USB)       | 418K | 01d2183f | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| lpc1768 (USB)       | 534K | 01d2183f | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| lpc1769 (USB)       | 628K | 01d2183f | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| sam4s8c (USB)       | 650K | 8d4a5c16 | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| samd51 (USB)        | 864K | 01d2183f | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| stm32f446 (USB)     | 870K | 01d2183f | arm-none-eabi-gcc (Fedora 7.4.0-1.fc30) 7.4.0 |
+| rp2040 (USB)        | 873K | c5667193 | arm-none-eabi-gcc (Fedora 10.2.0-4.fc34) 10.2.0 |
 
-Host Benchmarks
-===============
+## Host Benchmarks
 
 It is possible to run timing tests on the host software using the
 "batch mode" processing mechanism (described in
@@ -319,5 +424,5 @@ It is possible to run timing tests on the host software using the
 large and complex G-Code file and timing how long it takes for the
 host software to process it. For example:
 ```
-time ~/klippy-env/bin/python ./klippy/klippy.py config/example.cfg -i something_complex.gcode -o /dev/null -d out/klipper.dict
+time ~/klippy-env/bin/python ./klippy/klippy.py config/example-cartesian.cfg -i something_complex.gcode -o /dev/null -d out/klipper.dict
 ```

@@ -26,9 +26,10 @@ def resolve_bus_name(mcu, param, bus):
     # Check for reserved bus pins
     constants = mcu.get_constants()
     reserve_pins = constants.get('BUS_PINS_%s' % (bus,), None)
+    pin_resolver = ppins.get_pin_resolver(mcu_name)
     if reserve_pins is not None:
         for pin in reserve_pins.split(','):
-            ppins.reserve_pin(mcu_name, pin, bus)
+            pin_resolver.reserve_pin(pin, bus)
     return bus
 
 
@@ -38,7 +39,8 @@ def resolve_bus_name(mcu, param, bus):
 
 # Helper code for working with devices connected to an MCU via an SPI bus
 class MCU_SPI:
-    def __init__(self, mcu, bus, pin, mode, speed, sw_pins=None):
+    def __init__(self, mcu, bus, pin, mode, speed, sw_pins=None,
+                 cs_active_high=False):
         self.mcu = mcu
         self.bus = bus
         # Config SPI object (set all CS pins high before spi_set_bus commands)
@@ -46,7 +48,8 @@ class MCU_SPI:
         if pin is None:
             mcu.add_config_cmd("config_spi_without_cs oid=%d" % (self.oid,))
         else:
-            mcu.add_config_cmd("config_spi oid=%d pin=%s" % (self.oid, pin))
+            mcu.add_config_cmd("config_spi oid=%d pin=%s cs_active_high=%d"
+                               % (self.oid, pin, cs_active_high))
         # Generate SPI bus config message
         if sw_pins is not None:
             self.config_fmt = (
@@ -78,8 +81,10 @@ class MCU_SPI:
         self.mcu.add_config_cmd(self.config_fmt)
         self.spi_send_cmd = self.mcu.lookup_command(
             "spi_send oid=%c data=%*s", cq=self.cmd_queue)
-        self.spi_transfer_cmd = self.mcu.lookup_command(
-            "spi_transfer oid=%c data=%*s", cq=self.cmd_queue)
+        self.spi_transfer_cmd = self.mcu.lookup_query_command(
+            "spi_transfer oid=%c data=%*s",
+            "spi_transfer_response oid=%c response=%*s", oid=self.oid,
+            cq=self.cmd_queue)
     def spi_send(self, data, minclock=0, reqclock=0):
         if self.spi_send_cmd is None:
             # Send setup message via mcu initialization
@@ -89,17 +94,23 @@ class MCU_SPI:
             return
         self.spi_send_cmd.send([self.oid, data],
                                minclock=minclock, reqclock=reqclock)
-    def spi_transfer(self, data):
-        return self.spi_transfer_cmd.send_with_response(
-            [self.oid, data], 'spi_transfer_response', self.oid)
+    def spi_transfer(self, data, minclock=0, reqclock=0):
+        return self.spi_transfer_cmd.send([self.oid, data],
+                                          minclock=minclock, reqclock=reqclock)
+    def spi_transfer_with_preface(self, preface_data, data,
+                                  minclock=0, reqclock=0):
+        return self.spi_transfer_cmd.send_with_preface(
+            self.spi_send_cmd, [self.oid, preface_data], [self.oid, data],
+            minclock=minclock, reqclock=reqclock)
 
 # Helper to setup an spi bus from settings in a config section
 def MCU_SPI_from_config(config, mode, pin_option="cs_pin",
-                        default_speed=100000):
+                        default_speed=100000, share_type=None,
+                        cs_active_high=False):
     # Determine pin from config
     ppins = config.get_printer().lookup_object("pins")
     cs_pin = config.get(pin_option)
-    cs_pin_params = ppins.lookup_pin(cs_pin)
+    cs_pin_params = ppins.lookup_pin(cs_pin, share_type=share_type)
     pin = cs_pin_params['pin']
     if pin == 'None':
         ppins.reset_pin_sharing(cs_pin_params)
@@ -122,7 +133,7 @@ def MCU_SPI_from_config(config, mode, pin_option="cs_pin",
         bus = config.get('spi_bus', None)
         sw_pins = None
     # Create MCU_SPI object
-    return MCU_SPI(mcu, bus, pin, mode, speed, sw_pins)
+    return MCU_SPI(mcu, bus, pin, mode, speed, sw_pins, cs_active_high)
 
 
 ######################################################################
@@ -154,8 +165,10 @@ class MCU_I2C:
         self.mcu.add_config_cmd(self.config_fmt % (bus,))
         self.i2c_write_cmd = self.mcu.lookup_command(
             "i2c_write oid=%c data=%*s", cq=self.cmd_queue)
-        self.i2c_read_cmd = self.mcu.lookup_command(
-            "i2c_read oid=%c reg=%*s read_len=%u", cq=self.cmd_queue)
+        self.i2c_read_cmd = self.mcu.lookup_query_command(
+            "i2c_read oid=%c reg=%*s read_len=%u",
+            "i2c_read_response oid=%c response=%*s", oid=self.oid,
+            cq=self.cmd_queue)
         self.i2c_modify_bits_cmd = self.mcu.lookup_command(
             "i2c_modify_bits oid=%c reg=%*s clear_set_bits=%*s",
             cq=self.cmd_queue)
@@ -169,8 +182,7 @@ class MCU_I2C:
         self.i2c_write_cmd.send([self.oid, data],
                                 minclock=minclock, reqclock=reqclock)
     def i2c_read(self, write, read_len):
-        return self.i2c_read_cmd.send_with_response(
-            [self.oid, write, read_len], 'i2c_read_response', self.oid)
+        return self.i2c_read_cmd.send([self.oid, write, read_len])
     def i2c_modify_bits(self, reg, clear_bits, set_bits,
                         minclock=0, reqclock=0):
         clearset = clear_bits + set_bits
@@ -197,3 +209,44 @@ def MCU_I2C_from_config(config, default_addr=None, default_speed=100000):
         addr = config.getint('i2c_address', default_addr, minval=0, maxval=127)
     # Create MCU_I2C object
     return MCU_I2C(i2c_mcu, bus, addr, speed)
+
+
+######################################################################
+# Bus synchronized digital outputs
+######################################################################
+
+# Helper code for a gpio that updates on a cmd_queue
+class MCU_bus_digital_out:
+    def __init__(self, mcu, pin_desc, cmd_queue=None, value=0):
+        self.mcu = mcu
+        self.oid = mcu.create_oid()
+        ppins = mcu.get_printer().lookup_object('pins')
+        pin_params = ppins.lookup_pin(pin_desc)
+        if pin_params['chip'] is not mcu:
+            raise ppins.error("Pin %s must be on mcu %s" % (
+                pin_desc, mcu.get_name()))
+        mcu.add_config_cmd("config_digital_out oid=%d pin=%s value=%d"
+                           " default_value=%d max_duration=%d"
+                           % (self.oid, pin_params['pin'], value, value, 0))
+        mcu.register_config_callback(self.build_config)
+        if cmd_queue is None:
+            cmd_queue = mcu.alloc_command_queue()
+        self.cmd_queue = cmd_queue
+        self.update_pin_cmd = None
+    def get_oid(self):
+        return self.oid
+    def get_mcu(self):
+        return self.mcu
+    def get_command_queue(self):
+        return self.cmd_queue
+    def build_config(self):
+        self.update_pin_cmd = self.mcu.lookup_command(
+            "update_digital_out oid=%c value=%c", cq=self.cmd_queue)
+    def update_digital_out(self, value, minclock=0, reqclock=0):
+        if self.update_pin_cmd is None:
+            # Send setup message via mcu initialization
+            self.mcu.add_config_cmd("update_digital_out oid=%c value=%c"
+                                    % (self.oid, not not value))
+            return
+        self.update_pin_cmd.send([self.oid, not not value],
+                                 minclock=minclock, reqclock=reqclock)
